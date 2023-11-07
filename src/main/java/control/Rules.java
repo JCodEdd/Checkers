@@ -2,66 +2,96 @@ package control;
 
 import java.util.*;
 
+/** 
+ * Encapsulates all checkers game rules validation. Implements Singleton pattern.
+ */
 public class Rules {
     // http://www.wcdf.net/rules.htm
-    //SINGLETON impl
-    private static Rules _instance;
-    private char[][] _localBoard;
-    private boolean _ai;                //signals ai turn or not
-    private ArrayList<int[]> _jumpTree; //arrayList que guarda los arreglos con las coordenanas de cada salto multiple
-    private int _longestJump;
+    //SINGLETON implementation
+
+    private static Rules instance;
+    private char[][] localBoard;
+    private boolean ai;
+    private boolean isKing;
 
     /**
-     * Para cada pieza, antes de generar las jugadas, se chequea si es rey, si lo es,
-     * se marca este campo como true para cada una de las validaciones/chequeos que vienen
-     * despues. Asi se evita hacer el mismo chequeo varias veces o pasar un argumento extra
-     * a cada metodo.
+     * Stores arrays with the coordinates of each multiple jump
      */
-    private boolean _isKing;
-
-    private int _jumpBasedTree;
+	private ArrayList<int[]> jumpTree; 
+    
+    /**
+     * Tracks the maximum jump sequence length encountered while recursively searching
+     * all possible jumps from the current position. Used only temporarily during 
+     * move generation logic.
+     */
+    private int maxFoundJumpLength;
 
     /**
-     * Constructor privado
+     * Stores the depth of the deepest jump sequence possible from the current position,
+     * as communicated by the move generation methods. This "level" value
+     * determines the priority of positions during minimax search.
      */
+    private int positionJumpLevel;
+
+    
     private Rules(){}
 
     /**
-     * Getter para la instancia de esta clase.
-     * La implementacion de esta clase es de instancia unica
-     * @return instancia de la clase
+     * Provides access to the singleton instance of the Rules class.
      */
     public static Rules getInstance(){
-        if(_instance == null)
-            _instance = new Rules();
-        return _instance;
+        if(instance == null)
+            instance = new Rules();
+        return instance;
     }
 
     /**
-     * Setea las propiedades esenciales para cada "jugador"
-     * @param board tablero
-     * @param ai    es la ia o no
+     * Configures the Rules instance with the game state specific to the current player's turn.
+     * @param board current board state
+     * @param ai    if the AI is the active player
      */
     public void setPropertiesForPlayer(char[][] board, boolean ai){
-        _localBoard = board;
-        _ai = ai;
+        localBoard = board;
+        this.ai = ai;
+    }
+
+    
+    /**
+     * Checks if the piece at the given position has been crowned according to the game rules.
+     * @param piece type of piece (red or black)
+     * @param row where the play ends
+     * @return boolean
+     */
+    public boolean isCrowned(char piece, int row){
+        return  (piece == 'r' && row == 0) ||
+                (piece == 'b' && row == 7);
+    }
+
+	/**
+	 * Returns the "level or priority" of possible moves 
+     * (0 = "normal moves" or 1,2,3... "length" of jump)
+	 * @return int value
+	 */
+
+    public int getLevelOfPlays(){
+        return positionJumpLevel;
     }
 
     /**
-     * Usa el tablero y el jugador actuales para buscar todas las posibles jugadas
-     * de cada pieza del jugador siguiendo las reglas.
-     * @return ArrayList con las jugadas, ejemplo:[4,3,3,4] (el 1er par de elementos es la posicion original de
-     *                                                          la pieza y cada par de los siguientes es la direccion
-     *                                                          de una casilla de la jugada)
+     * Generates all valid single moves and jump sequences for the active player's 
+     * pieces based on the current board state.
+     * @return ArrayList containing the legal moves, with each move 
+     *          represented as an int array in the format [startRow, startCol, 
+     *          endRow1, endCol1, ...endRowN, endColN]
      */
     public ArrayList<int[]> bestMoves(){
         ArrayList<int[]> moves = new ArrayList<>();
-        int globalLevel = 0;            // se usa para detectar cuando existen jumps posibles y por tanto
-        for(int r=0;r<8;r++){           // eliminar las jugadas guardadas hasta el momento
+        int globalLevel = 0;            
+        for(int r=0;r<8;r++){           
             for(int c=0;c<8;c++){
-                if(ownPiece(r, c)){
-                    _isKing = recognize(r, c).equals("king");
-                    AbstractMap.SimpleEntry<Integer, int[][]> possibilities = findAllPossibleMoves(r, c);
+                if(isOwnPiece(r, c)){
+                    isKing = recognize(r, c).equals("king");
+                    AbstractMap.SimpleEntry<Integer, int[][]> possibilities = getPiecePossibleMoves(r, c);
                     int level = possibilities.getKey();
                     if(level==globalLevel){
                         saveMoves(moves,possibilities.getValue(),false);
@@ -78,7 +108,7 @@ public class Rules {
                 }
             }
         }
-        _jumpBasedTree = globalLevel;
+        positionJumpLevel = globalLevel;
         return moves;
     }
 
@@ -100,25 +130,25 @@ public class Rules {
     }
 
     /**
-     * Busca todas las posibles jugadas de la pieza en la casilla especificada.
-     * Si existe posibilidad de un "jump" todas las jugadas son ignoradas (segun las reglas)
-     *
-     * @param row row int
-     * @param col col int
-     * @return SimpleEntry <Integer,int[][]> Integer es el nivel de la jugada indica la jugada a realizar y
-     * el arreglo son las coordenadas de cada posicion de la jugada
+     * Returns all valid single moves or possible jump sequences for the specified piece 
+     * based on the current board state. If there's a jump all single moves are ignored (per the rules)
+     * @see Rules#pairStructure(int, int, String, int[][])
+     * @param row int
+     * @param col int
+     * @return {@code AbstractMap.SimpleEntry<Integer,int[][]>} where Integer is 
+     *    max jump level (0 if no jumps are possible) and int[][] contains coordinate arrays for each move
      */
 
-    private AbstractMap.SimpleEntry<Integer, int[][]> findAllPossibleMoves(int row, int col){
+    private AbstractMap.SimpleEntry<Integer, int[][]> getPiecePossibleMoves(int row, int col){
         int[][] listOfMoves;
         int[][] listOfJumps;
-        _longestJump=0;
+        maxFoundJumpLength=0;
 
         listOfMoves = possibleMoves(row, col);
 
-        if(_isKing)
+        if(isKing)
             listOfJumps = possibleJumps(row,col,"all");
-        else if(_ai)
+        else if(ai)
             listOfJumps = possibleJumps(row,col,"down");
         else
             listOfJumps = possibleJumps(row,col,"up");
@@ -131,19 +161,17 @@ public class Rules {
     }
 
     /**
-     * Auxiliar para estructurar bien la jugada y filtrar casos incorrectos,
-     * crea una estructura Pair<Integer,int[][]>
-     * Integer - describe el nivel de la jugada, valores posible: [1,2,3... = "jumps",0 = "moves",-1 = null]
-     * int[][] - guarda la jugada
-     *
-     * @param row     row
-     * @param col     column
-     * @param mode    string [jumps o moves]
-     * @param actions jugadas encontradas en el metodo anterior
-     * @return Pair
+     * Groups the valid moves or sequences (jumps) found for a piece into a SimpleEntry structure
+     * representing the possible gameplay rounds.
+     * 
+     * @param row int
+     * @param col int
+     * @param mode string [jumps o moves]
+     * @param actions array of possible moves/jumps
+     * @return SimpleEntry containing max jump length and array of moves/jumps
      */
     private AbstractMap.SimpleEntry<Integer, int[][]> pairStructure(int row, int col, String mode, int[][] actions){
-        //Here to test
+        
         ArrayList<int[]> tempArrayList = new ArrayList<>();
         if(mode.equals("moves")){
             if(actions == null){
@@ -156,10 +184,10 @@ public class Rules {
                 }
             }
         }
-        else{      //si mode es "jumps"
-            _jumpTree = new ArrayList<>();
+        else{      //mode is jumps
+            jumpTree = new ArrayList<>();
             testForMultipleJumps(new int[0],actions);
-            tempArrayList.addAll(_jumpTree);
+            tempArrayList.addAll(jumpTree);
         }
 
         int [][] returnStructure = new int[tempArrayList.size()][];
@@ -168,12 +196,11 @@ public class Rules {
             copyArrayMovesStructure(tempArrayList.get(i),temp,row,col);
             returnStructure[i] = temp;
         }
-        return new AbstractMap.SimpleEntry<>(_longestJump,returnStructure);
+        return new AbstractMap.SimpleEntry<>(maxFoundJumpLength,returnStructure);
     }
 
     /**
-     * Inserta las coordenadas iniciales al array con los datos de una jugada
-     * Similar a:
+     * Copies the coordinates from the old array into a new array, prepending the start row/col
      * @see Rules#enlargeArray(int[], int[], int[])
      * @param old old array
      * @param actual new array
@@ -189,34 +216,30 @@ public class Rules {
     }
 
     /**
-     * Chequea si hay jumps multiples posibles a realizar. Para cada jump dentro de las acciones posibles:
-     * chequea si la direccion de la casilla del primer jump del arreglo (from[]) es valida,
-     * en caso positivo registra esa casilla en path[],
-     * llama el metodo que busca los jumps posibles a realizar estando en dicha casilla y con lo que
-     * este devuelve mas la posicion actual se llama recursivamente,
-     * cuando encuentra el final de un jump multiple guarda el recorrido completo del jump en _jumpTree y cambia
-     * al paso recursivo siguiente al terminado (el primero de los pendientes).
+     * Recursively checks all possibilities for multiple jumps from the current position.
+     * Stores full jump sequences found in jumpTree.
+     * 
      * @param path visited places
      * @param from possible moves
      */
     private void testForMultipleJumps(int[] path,int[][] from){
 
-        if(from == null){   //cuando no hay mas jumps posibles llagamos al final del jump multiple actual
-            int length = path.length/2 ; //longitud del salto (1, 2, 3...)
-            _longestJump = Math.max(length, _longestJump);
-            _jumpTree.add(path);
+        if(from == null){   //no more possible jumps means the end of current path
+            int length = path.length/2 ; //jump length(1, 2, 3...)
+            maxFoundJumpLength = Math.max(length, maxFoundJumpLength);
+            jumpTree.add(path);
         }
         else{
             if(path.length > 2)
                 checkPath(path, from);
-            String[] directions = {"up","up","down","down"}; //el arreglo de posibles jumps tiene la estructura
-                                      //[[arriba,izquierda],[arriba,derecha],[abajo,derecha],[abajo,izquierda]]
+
+            String[] directions = {"up","up","down","down"};
 
             for(int i=0;i<4;i++){
                 if(!(from[i][0]==-1 && from[i][1]==-1)){
                     int[] temp = new int[path.length + 2];
                     enlargeArray(path, temp, from[i]);
-                    if(_isKing) {
+                    if(isKing) {
                         testForMultipleJumps(temp , possibleJumps(from[i][0],from[i][1],"all"));
                     }
                     else
@@ -229,12 +252,10 @@ public class Rules {
     }
 
     /**
-     * Chequea si alguna direccion del nuevo posible jump es la direccion de la jugada anterior (que seria la penultima
-     * posicion registrada porque la ultima es la actual) para evitar saltar
-     * sobre la misma ficha, si está la cambia por una posicion invalida, si no devuelve el arreglo sin cambios
-     *
-     * @param path  camino del jump
-     * @param check nueva posicion
+     * Validates the path array does not contain duplicate jumps in the same direction.
+     * 
+     * @param path 
+     * @param check 
      */
     private void checkPath(int[] path, int[][] check){
         int l = path.length;
@@ -252,9 +273,8 @@ public class Rules {
     }
 
     /**
-     * Chequea si el arrleglo de los jumps posibles solo contiene posicione invalidas ([-1,-1])
-     * @param from arreglo de los jumps
-     * @return contiene todas las jugadas invalidas o no
+     * Checks if the provided moves array contains only invalid (-1,-1) entries
+     * @param from array
      */
     private boolean checkInvalid(int[][] from){
         int invalNum = 0;
@@ -268,10 +288,10 @@ public class Rules {
 
 
     /**
-     * Añade los datos de una nueva posicion a path
-     * @param from arreglo a agrandar (path)
-     * @param to nuevo arreglo con los datos añadidos
-     * @param add array datos que hay que agregarle a path
+     * Enlarges the path array by adding the add array elements to the to array.
+     * @param from array to enlarge (path)
+     * @param to array
+     * @param add array
      */
     private void enlargeArray(int[]from,int[]to,int[]add){
         if(from != null && to!=null && add!=null){
@@ -285,15 +305,18 @@ public class Rules {
     }
 
     /**
-     * enum type para las direcciones posibles de un jump
+     * Enum type for jump directions. If isKing, then all directions are valid, 
+     * otherwise only up or down depending of the piece color.
      */
     private enum Direction{down,up,all}
+
     /**
-     * Encuentra todos los posibles jumps en la direccion especificada
-     * @param row int row
-     * @param col int column
-     * @param direct direccion en la cual la pieza se puede mover(en todas o solo hacia abajo)
-     * @return int[][] the possible jumps in structure [[5,3,3,3],[row,col,row,col,row,col],[]] - jump from position [5,3] to position [3,3]
+     * Finds valid jump moves for a piece in the given direction from the provided position on the board.
+     * @param row int
+     * @param col int
+     * @param direct String direction
+     * @return int[][] the possible jumps in the format [[up,left], [up,right], [down,right], [down,left]]
+     *          invalid jumps are represented by [-1,-1]
      */
     private int[][] possibleJumps(int row, int col, String direct){
         if ((row == col) && (col == -1))
@@ -346,10 +369,11 @@ public class Rules {
     }
 
     /**
-     * Busca los movimientos posibles para la ficha en la posicion dada
-     * @param row int row
-     * @param col int col
-     * @return int[][] all moves (4 directions
+     * Finds valid regular (non-jump) moves for a piece from the provided position on the board.
+     * @see Rules#possibleJumps(int, int, String)
+     * @param row int
+     * @param col int
+     * @return int[][] containing possible moves or null if none found
      */
     private int[][] possibleMoves(int row, int col){
         int [][] listOfMoves ={{-1,-1},{-1,-1},{-1,-1},{-1,-1}};
@@ -381,11 +405,10 @@ public class Rules {
     }
 
     /**
-     * Chequea si la jugada es posible
+     * Checks if a regular (non-jump) move from the current position to the given row/col is valid.
      * @param previousRow int
      * @param row int
      * @param col int
-     * @return boolean
      */
     private Boolean isTheMovePossible(int previousRow, int row, int col){
         return ((isInRange(row) && isInRange(col) && recognize(row,col).equals("empty")) &&
@@ -393,105 +416,73 @@ public class Rules {
     }
 
     /**
-     * Chequea si el jump (accion de "comer" una pieza) es posible dados los argumentos
-     * @param row int row
-     * @param col int col
-     * @param vert int direccion vertical (+1 / -1)
-     * @param horiz int direccion horizontal (+1 / -1)
-     * @return boolean
+     * Checks if a jump move from the current position in the given direction is valid according to the rules.
+     * @param row int
+     * @param col int
+     * @param verticalDirection (+1 or -1)
+     * @param horizontalDirection (+1 or -1)
      */
-    private Boolean isTheJumpPossible(int row,int col,int vert,int horiz){
-        int tempRow =row+vert;
-        int tempCol =col+horiz;
-        // FIRST CHECK (hay una pieza del oponente en la casilla contigua?)
-        // SECOND CHECK (hay una casilla vacia disponible para el jump?)
-        boolean firstRange = isInRange(tempRow) && isInRange(tempCol);
-        if(!firstRange){return false;}
-        boolean firstCheck = opponentsPiece(tempRow, tempCol);
-        tempRow+=vert;
-        tempCol+=horiz;
+    private Boolean isTheJumpPossible(int row,int col,int verticalDirection,int horizontalDirection){
+        int tempRow =row+verticalDirection;
+        int tempCol =col+horizontalDirection;
+
+        if (!(isInRange(tempRow) && isInRange(tempCol))) {
+            return false;
+        }
+        boolean firstCheck = isOpponentsPiece(tempRow, tempCol);
+
+        tempRow+=verticalDirection;
+        tempCol+=horizontalDirection;
+
         boolean forward = isMovingFwd(row, tempRow);
-        boolean secondRange = isInRange(tempRow) && isInRange(tempCol);
-        if(!secondRange){return false;}
-        boolean secondCheck = (_localBoard[tempRow][tempCol] == 'e');
+
+        if (!(isInRange(tempRow) && isInRange(tempCol))) {
+            return false;
+        }
+        boolean secondCheck = (localBoard[tempRow][tempCol] == 'e');
         return firstCheck && forward && secondCheck;
     }
 
 
     /**
-     * Chequea si la pieza esta avanzando con la posible jugada (o si es rey y puede retroceder)
-     * @param prevRow fila inicial
-     * @param row fila final
+     * Checks if a move represents forward movement for the given player/piece.
+     * Or if it's a king and can move backward
+     * @param prevRow 
+     * @param row 
      * @return boolean
      */
     private Boolean isMovingFwd(int prevRow, int row){
-        return (_isKing || (!_ai && prevRow>row) ||
-                (_ai && prevRow<row));
+        return (isKing || (!ai && prevRow>row) ||
+                (ai && prevRow<row));
     }
 
     /**
-     * Chequea si el argumento esta en rango del tablero
-     * @param a int number
-     * @return boolean decision
+     * Checks if row or column is in range for the board.
+     * @param a int
      */
     private Boolean isInRange(int a){
         return a < 8 && a >= 0;
     }
 
-    /**
-     * Reconoce el tipo de ficha que hay en la casilla
-     * @param row int
-     * @param col int
-     * @return String
-     */
     private String recognize(int row,int col){
-        char reco = _localBoard[row][col];
-        return switch (reco) {
+        char piece = localBoard[row][col];
+        return switch (piece) {
             case 'b', 'r' -> "basic";
             case 'B', 'R' -> "king";
             default -> "empty";
         };
     }
 
-    /**
-     * Reconoce si la pieza en la posicion dada es del oponente
-     * @param r int
-     * @param c int
-     * @return boolean
-     */
-    private boolean opponentsPiece(int r,int c){
-        return ( (_ai && (_localBoard[r][c] == 'r' || _localBoard[r][c] == 'R')) ||
-                 (!_ai && (_localBoard[r][c] == 'b' || _localBoard[r][c] == 'B')));
+    private boolean isOpponentsPiece(int row,int col){
+        return ( (ai && (localBoard[row][col] == 'r' || localBoard[row][col] == 'R')) ||
+                 (!ai && (localBoard[row][col] == 'b' || localBoard[row][col] == 'B')));
     }
 
-    /**
-     * Reconoce si la pieza en la posicion dada es de la IA(b) o del usuario(r)
-     * @param r int
-     * @param c int
-     * @return boolean
-     */
-    private boolean ownPiece(int r, int c){
-        return ( (_ai && (_localBoard[r][c] == 'b' || _localBoard[r][c] == 'B')) ||
-                (!_ai && (_localBoard[r][c] == 'r' || _localBoard[r][c] == 'R')));
+    private boolean isOwnPiece(int row, int col){
+        return ( (ai && (localBoard[row][col] == 'b' || localBoard[row][col] == 'B')) ||
+                 (!ai && (localBoard[row][col] == 'r' || localBoard[row][col] == 'R')));
     }
 
-    /**
-     * Chequea si una pieza llega a la fila final del tablero y se convierte en rey
-     * @param piece tipo de pieza (roja o negra)
-     * @param row fila donde termina la jugada
-     * @return boolean
-     */
-    public boolean isCrowned(char piece, int row){
-        return (piece == 'r' && row == 0) ||
-                (piece == 'b' && row == 7);
-    }
-
-    /**
-     * Devuelve el "nivel o prioridad" de las jugadas posibles (0 = "jugadas normales"; 1,2,3... "longitud" del jump)
-     * @return int value
-     */
-    public int getLevelOfPlays(){
-        return _jumpBasedTree;
-    }
-
+    //TODO:move both these methods to the public part of the class
+    
 }

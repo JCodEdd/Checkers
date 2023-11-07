@@ -244,6 +244,7 @@ minimax(origin, depth, TRUE)
         board[prevR][prevC] = piece;
     }
 
+    
     /**
      * Elimina la pieza
      * @param board el tablero
