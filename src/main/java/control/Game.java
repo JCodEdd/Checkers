@@ -2,23 +2,66 @@ package control;
 
 
 import java.util.Arrays;
+import java.util.Random;
 
 
 /**
- * De momento los metodos de esta clase son de apoyo para poder probar la funcionalidad de las demas clases
+ * Manages board state and allows using sample game states to test AI and Rules functionality.
  */
 public class Game {
-    private final AI _ai;
-    private char[][] _board;
+    private final AI ai;
+    private char[][] board;
+
+    
+    /**
+     * Constructor
+     */
+    public Game() {
+        ai = new AI();
+    }
+    
+    /**
+     * Simulates an ai turn in given board state. Prints the board, gets the best ai move,
+     * updates the board with it and prints the board again.
+     * @param positions board state
+     * @see AI#playAi()
+     */
+    public void playWithBoard(String[] positions){
+        board = generateBoardFromInput(positions);
+        ai.setBoard(board);
+        int[] play = ai.playAi();
+        System.out.println("Before the move");
+        printBoard();
+        System.out.println();
+        updateBoard(play);
+        System.out.println("After the move");;
+        printBoard();
+    }
 
     /**
-     * Genera un tablero inicializando las posiciones invalidas en '\0' y el resto en 'e' (empty), luego
-     * inserta en las posiciones indicadas las fichas que desee el usuario
-     * @param positions posiciones ocupadas en el tablero (ejemplo: ["0 1 b", "1 2 r", "3 4 r"])
-     * @return tablero inicializado
+     * Simulates an ai turn in randomly generated board state. Prints the board, gets 
+     * the best ai move, updates the board with it and prints the board again.
+     * @see AI#playAi()
      */
-    private char[][] boardGenerator(String[] positions){
+    public void playWithRandomBoard(){
+        board = generateRandomBoard();
+        ai.setBoard(board);
+        int[] play = ai.playAi();
+        System.out.println("Before the move");
+        printBoard();
+        System.out.println();
+        updateBoard(play);
+        System.out.println("After the move");;
+        printBoard();
+    }
 
+    /**
+     * Generates the initial game board state by placing starting pieces on an 
+     * empty board based on given positions.
+     * @param positions  Strings representing row,col,piece for starting positions
+     * @return initialized game board
+     */
+    private char[][] generateBoardFromInput(String[] positions){
         char[][] board  = new char[8][8];
         for(int i=0; i<8; i++){
             for(int j=0; j<8; j++){
@@ -28,82 +71,81 @@ public class Game {
                     board[i][j] = 'e';
             }
         }
-
         for (String position : positions) {
             int row = Integer.parseInt(position.substring(0,1));
             int col = Integer.parseInt(position.substring(2,3));
             if(board[row][col] == 'e')
                 board[row][col] = position.charAt(4);
         }
-
         return board;
-
     }
-
+    
     /**
-     * Constructor
+     * Generates a random game board with around 5 pieces for each player.
+     * @return randomly initialized game board
      */
-    public Game() {
-        _ai = new AI();
+    private char[][] generateRandomBoard(){
+        char[][] board  = new char[8][8];
+        char[] pieceType = {'r','R','b','B'};
+        int rCount=0,bCount=0;
+        Random random = new Random();
+
+        for(int i=0; i<8; i++){
+            for(int j=0; j<8; j++){
+                if( (i+j) % 2 == 0)
+                    board[i][j] = '\0';
+                else{
+                    board[i][j] = 'e';
+                }
+            }
+        }
+
+        while (rCount <= 4 || bCount <= 4) {
+            int randRow = random.nextInt(8);
+            int randCol = random.nextInt(8);
+            if( (randRow+randCol) % 2 == 0)
+                    continue;
+            char nextPiece = pieceType[random.nextInt(4)];
+
+            if(rCount>5 && (nextPiece=='r' || nextPiece=='R'))
+                continue;
+            else if (bCount>5 && (nextPiece=='b' || nextPiece=='B'))
+                continue;
+ 
+            switch (nextPiece){
+                case 'r', 'R' -> rCount++;
+                case 'b', 'B' -> bCount++;
+            }
+            board[randRow][randCol] = nextPiece;
+        }
+        
+        return board;
     }
 
     /**
-     * Usa las posiciones que se deseen inicializar para crear el tablero y buscar la mejor jugada para la ia,
-     * luego actualiza el tablero actual con dicha jugada, llama a printBoard() antes de actualizar
-     * para poder observar la jugada
-     * @param positions posiciones ocupadas en el tablero
-     * @return mejor jugada encontrada por la ia
-     * @see AI#playAi()
-     */
-    public int[] playwithBoard(String[] positions){
-        _board = boardGenerator(positions);
-        _ai.setBoard(_board);
-        int[] play = _ai.playAi();
-        System.out.println("Tablero antes de la jugada");
-        printBoard();
-        System.out.println();
-        updateBoard(play);
-        return play;
-    }
-
-    /**
-     * Actualiza el tablero actual de acuerdo a la jugada que se le pase
+     * Updates the board with the given move.
      * @param play jugada
      */
     private void updateBoard(int[] play){
-        _ai.makeTheMove(play, _board);
+        ai.makeTheMove(play, board);
     }
 
     /**
-     * Imprime el tablero fila por fila, crea una copia auxiliar y reemplaza las casillas vacias ('e') o
-     * las no validas en el juego ('\0') con (' '), luego cambia las fichas de la ia ('b') con ('□')
-     * y las del rival ('r') con ('■'), por ultimo reemplaza algunos caracteres por otros para "simular" mejor un tablero
+     * Prints the board in a basic visual representation.
      */
-    public void printBoard(){
-        char[][] boardCopy = _board.clone();
+    private void printBoard(){
+        char[][] boardCopy = board.clone();
         char[] aux;
 
-        for(int i=0; i<8; i++){                   //hay que tomar un camino algo mas  largo que el usual para actualizar
-            for(int j=0; j<8; j++){               //la copia del tablero, de lo contrario se actualiza tambien el tablero
+        for(int i=0; i<8; i++){                   
+            for(int j=0; j<8; j++){              
                 if(boardCopy[i][j] == 'e' || boardCopy[i][j] == '\0'){
                     aux = boardCopy[i].clone();
                     aux[j] = ' ';
                     boardCopy[i] = aux;
                 }
-                if(boardCopy[i][j] == 'r'){
-                    aux = boardCopy[i].clone();
-                    aux[j] = '\u25A0';
-                    boardCopy[i] = aux;
-                }
-                if(boardCopy[i][j] == 'b'){
-                    aux = boardCopy[i].clone();
-                    aux[j] = '\u25A2';
-                    boardCopy[i] = aux;
-                }
             }
         }
-
-
         System.out.println("+----+-----+-----+-----+-----+-----+-----+----+");
 
         for (char[] row : boardCopy) {

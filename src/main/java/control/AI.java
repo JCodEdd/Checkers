@@ -4,83 +4,62 @@ import java.util.ArrayList;
 
 public class AI{
 
-    // PUNTOS DE CADA ASPECTO DE LA FUNCION QUE EVALUA EL TABLERO (tarjet function)
-    // PUNTOS POR POSICIONES
-    int _POINT_FOR_WIN = 100;
-    int _POINT_FOR_KING = 20;
-    int _POINT_FOR_PIECE = 10;
+    // Point values for each aspect of the target function that evaluates the board.
+    // Point values for piece positions.
+    int POINT_FOR_WIN = 100;
+    int POINT_FOR_KING = 20;
+    int POINT_FOR_PIECE = 10;
 
-    int _POINT_FOR_THREAT = 10;
-    int _POINT_FOR_SIDES= 4;
+    int POINT_FOR_THREAT = 10;
+    int POINT_FOR_SIDES = 4;
 
 
-    // NIVEL MAS PROFUNDO DE BUSQUEDA EN EL ARBOL (cantidad de jugadas que podra la IA preveer)
-    int _TOP_RECURSION_LEVEL = 7;
+    // Maximum depth of search in the game tree (number of moves the AI can anticipate).
+    int TOP_RECURSION_LEVEL = 6;
 
-    private int _pieces;
-    private int _kings;
-    private char[][] _gameBoard;
-    private final Rules _rules;
-    private ArrayList<int[]> _bestMovesList;
-    private ArrayList<Integer> _decisionTree;
+    private char[][] gameBoard;
+    private final Rules rules;
+    private ArrayList<int[]> bestMovesList;
+    private ArrayList<Integer> decisionTree;
 
     /**
      * Constructor
      */
     public AI() {
-        _rules = Rules.getInstance();
-        _pieces = 12;
-        _kings = 0;
+        rules = Rules.getInstance();
     }
+    
     /**
-     * Setter para la cant de piezas (no se usa de momento, el juego no esta completo)
-     * @param count int
-     */
-    private void setPieces(int count){
-        _pieces = count;
-    }
-    /**
-     * Setter para la cant de reyes (igual que el anterior)
-     * @param count int
-     */
-    private void setKings(int count){
-        _kings = count;
-    }
-
-    /**
-     * Setter para el tablero
+     * Setter for the board
      * @param board tablero
      */
     public void setBoard(char[][] board){
-        _gameBoard = copyBoard(board);
+        gameBoard = copyBoard(board);
     }
 
     /**
-     * Getter para el tablero
+     * Getter for the board
      * @return tablero
      */
     public char[][] getBoard() {
-        return _gameBoard;
+        return gameBoard;
     }
 
     /**
-     * Llama minimax y busca la mejor jugada por los puntajes(valor minimax) guardados de cada una,
-     * si dos jugadas tienen el mismo puntaje, devuelve la primera que se encontró segun el orden de busqueda
-     * @return la jugada en forma de arreglo (ejemplo [4,3,3,4] seria la jugada[[4,3],[3,4]])
-     *
+     * Finds and returns the best move for the ai
+     * @return best move in a int[] 
      */
     public int[] playAi(){
-        _decisionTree = new ArrayList<>();
-        int m = miniMax(_TOP_RECURSION_LEVEL,_gameBoard, true);
-        if(_bestMovesList == null || _bestMovesList.size()==0)
+        decisionTree = new ArrayList<>();
+        int m = miniMax(TOP_RECURSION_LEVEL, gameBoard, true);
+        if(bestMovesList == null || bestMovesList.size()==0)
             return null;
-        int i = _decisionTree.indexOf(m);
-
-        return _bestMovesList.get(i);
+        int i = decisionTree.indexOf(m);
+        return bestMovesList.get(i);
     }
 
 
-    /* PSEUDOCODIGO DE MINIMAX (WIKIPEDIA) SE USA DE BASE PARA LA IMPLEMENTACION QUE LE SIGUE
+    /* PSEUDOCODE FOR MINIMAX FROM WIKIPEDIA USED AS AN INSPIRATION
     function minimax(node, depth, maximizingPlayer)
     if depth = 0 or node is a terminal node
         return the heuristic value of node
@@ -104,19 +83,19 @@ minimax(origin, depth, TRUE)
     /**
      * MINIMAX
      *
-     * @param depth profundida actula en el arbol (cuenta al reves)
+     * @param depth profundida actual en el arbol (cuenta al reves)
      * @param board board
      * @param ai    juega la ia o no
      * @return valor minimax de cada estado
      */
     private int miniMax(int depth, char[][] board, boolean ai){
-        _rules.setPropertiesForPlayer(board, ai);
-        ArrayList<int[]> localArrayList = _rules.bestMoves();
-        if(depth == _TOP_RECURSION_LEVEL){  //antes de iniciar la recursion guarda todas las
-            _bestMovesList = localArrayList;  //jugadas posibles
+        rules.setPropertiesForPlayer(board, ai);
+        ArrayList<int[]> localArrayList = rules.bestMoves();
+        if(depth == TOP_RECURSION_LEVEL){  
+            bestMovesList = localArrayList;  
         }
         if(localArrayList.isEmpty()){
-            return ai?-_POINT_FOR_WIN:_POINT_FOR_WIN;
+            return ai?-POINT_FOR_WIN:POINT_FOR_WIN;
         }
         if(depth==0){
             return EvaluateBoard(board, ai);
@@ -128,9 +107,8 @@ minimax(origin, depth, TRUE)
                 makeTheMove(play, boardC);
                 int val = miniMax(depth - 1, boardC, !ai);
                 if (ai) {
-                    if (depth == _TOP_RECURSION_LEVEL) {
-                        _decisionTree.add(val);
-                    }
+                    if (depth == TOP_RECURSION_LEVEL) 
+                        decisionTree.add(val);
                     if (val > baseValue)
                         baseValue = val;
                 }
@@ -144,64 +122,65 @@ minimax(origin, depth, TRUE)
     }
 
     /**
-     * Target function para evaluar cada estado del tablero basado el los puntos definidos al inicio
+     * Calculates a score for the provided game board based on piece 
+     * placement and threat assessment. Uses constant point values defined.
      *
-     * @param board board
-     * @param ai    juega la ia o no
-     * @return int valor
+     * @param board game board
+     * @param ai    True if evaluating from the AI's perspective
+     * @return integer score calculated for the board
      */
     private int EvaluateBoard(char[][] board, boolean ai){
         int constant = (ai?1:-1);
         int constBl=1*constant;
         int constRd=-1*constant;
 
-        // se cuenta desde el punto de vista de la ia
         int score=0;
         for (int r=0; r<8; r++){
             for (int c=0; c<8; c++){
                 char cr = board[r][c];
-                // puntea la pieza
+                // points for pieces
                 switch (cr) {
-                    case 'r' -> score += (_POINT_FOR_PIECE * constRd);
-                    case 'R' -> score += (_POINT_FOR_KING * constRd);
-                    case 'b' -> score += (_POINT_FOR_PIECE * constBl);
-                    case 'B' -> score += (_POINT_FOR_KING * constBl);
+                    case 'r' -> score += (POINT_FOR_PIECE * constRd);
+                    case 'R' -> score += (POINT_FOR_KING * constRd);
+                    case 'b' -> score += (POINT_FOR_PIECE * constBl);
+                    case 'B' -> score += (POINT_FOR_KING * constBl);
                     default -> {
                     }
                 }
-                // puntea la posicion
+                // points for positions
                 if((cr=='r' || cr=='R')&&(c==0||c==7||r==0||r==7)){
-                    score+=(_POINT_FOR_SIDES*constRd);
+                    score+=(POINT_FOR_SIDES*constRd);
                 }
                 if((cr=='b' || cr=='B')&&(c==0||c==7||r==0||r==7)){
-                    score+=(_POINT_FOR_SIDES*constBl);
+                    score+=(POINT_FOR_SIDES*constBl);
                 }
             }
         }
         ArrayList<int[]> localArrayList;
-        _rules.setPropertiesForPlayer(board, false);
-        localArrayList = _rules.bestMoves();
-        int rVal = evalAlist(localArrayList)*_POINT_FOR_THREAT;
+        rules.setPropertiesForPlayer(board, false);
+        localArrayList = rules.bestMoves();
+        int rVal = evaluateThreatLevelFromMoves(localArrayList)*POINT_FOR_THREAT;
         localArrayList.clear();
-        _rules.setPropertiesForPlayer(board, true);
-        localArrayList = _rules.bestMoves();
-        int bVal = evalAlist(localArrayList)*_POINT_FOR_THREAT;
+        rules.setPropertiesForPlayer(board, true);
+        localArrayList = rules.bestMoves();
+        int bVal = evaluateThreatLevelFromMoves(localArrayList)*POINT_FOR_THREAT;
         score+=rVal*constRd;
         score+=bVal*constBl;
         if(ai)
-            return score;   //OJO probando devolver el mismo resultado con signo negativo
+            return score; 
         else
             return -score;
     }
 
     /**
-     * Cuenta cuantas piezas estan amenazadas por todas las jugadas posibles en el tablero actual
-     * @param arlist pool de jugadas posibles
-     * @return int value score
+     * Evaluates the threat level posed by the given list of possible moves 
+     * by counting threatened opponent pieces based on move lengths.
+     * @param arlist The list of possible moves to evaluate
+     * @return int The calculated threat score
      */
-    private int evalAlist(ArrayList<int[]> arlist){
+    private int evaluateThreatLevelFromMoves(ArrayList<int[]> arlist){
 
-        if(_rules.getLevelOfPlays()==0)
+        if(rules.getLevelOfPlays()==0)
             return 0;
         else{
             int score=0;
@@ -211,8 +190,7 @@ minimax(origin, depth, TRUE)
                 switch (temp) {
                     case 4 -> score += 1;
                     case 6 -> score += 2;
-                    case 2 -> score += 0;
-                    default -> score += 3;  //tiene en cuenta la posiblilidad de que existan jumps mas largos q 3
+                    default -> score += 3;  //possible jumps longer than 3 pieces
                 }
             }
             return score;
@@ -220,9 +198,9 @@ minimax(origin, depth, TRUE)
     }
 
     /**
-     * Realiza la jugada en el tablero
-     * @param play la jugada
-     * @param board  el tablero
+     * Applies the given move to the board. Modifies board parameter in-place.
+     * @param play
+     * @param board 
      */
     public void makeTheMove(int[] play, char[][] board) {
         int i=0;
@@ -236,9 +214,9 @@ minimax(origin, depth, TRUE)
             prevR=r;
             prevC=c;
         }
-        if((piece == 'b') && _rules.isCrowned(piece, prevR))
+        if((piece == 'b') && rules.isCrowned(piece, prevR))
             piece = 'B';
-        else if ((piece == 'r') && _rules.isCrowned(piece, prevR))
+        else if ((piece == 'r') && rules.isCrowned(piece, prevR))
             piece = 'R';
 
         board[prevR][prevC] = piece;
@@ -246,8 +224,9 @@ minimax(origin, depth, TRUE)
 
     
     /**
+     * Clears the pieces jumped over by the given move.
      * Elimina la pieza
-     * @param board el tablero
+     * @param board the game board
      * @param prevR previous row - start row
      * @param prevC previous column - start column
      * @param r actual row - end row
@@ -265,19 +244,14 @@ minimax(origin, depth, TRUE)
     }
 
     /**
-     * Crea una copia del tablero para instanciar _board y para las sucesivas llamadas recursivas, necesario
-     * para evitar problemas de actualizacion (referencias) generados con los metodos clone(), arraycopy(), copyOf(), etc.
-     * @param board tablero original
-     * @return copia
+     * Makes a deep copy of the given game board.
+     * @param board The board to copy
+     * @return A duplicated two-dimensional char array Board
      */
     private char[][] copyBoard(char[][] board){
         char[][] temp = new char[8][8];
         for(int r=0;r<8;r++){
             temp[r] = board[r].clone();
-            /*
-            System.arraycopy(board[r], 0, temp[r], 0, 8);
-
-             */
         }
         return temp;
     }

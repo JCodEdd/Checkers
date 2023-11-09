@@ -28,8 +28,7 @@ public class Rules {
 
     /**
      * Stores the depth of the deepest jump sequence possible from the current position,
-     * as communicated by the move generation methods. This "level" value
-     * determines the priority of positions during minimax search.
+     * as communicated by the move generation methods.
      */
     private int positionJumpLevel;
 
@@ -69,7 +68,7 @@ public class Rules {
 
 	/**
 	 * Returns the "level or priority" of possible moves 
-     * (0 = "normal moves" or 1,2,3... "length" of jump)
+     * (0 = "normal moves" or 1,2,3... "length" of longest jump)
 	 * @return int value
 	 */
 
@@ -93,15 +92,16 @@ public class Rules {
                     isKing = recognize(r, c).equals("king");
                     AbstractMap.SimpleEntry<Integer, int[][]> possibilities = getPiecePossibleMoves(r, c);
                     int level = possibilities.getKey();
-                    if(level==globalLevel){
+                    if((globalLevel==0) && (level==0)){
                         saveMoves(moves,possibilities.getValue(),false);
                     }
-                    if(level>globalLevel){
-                        if(globalLevel == 0){ //si cae en este caso y global level es 0 solo se han encontrado hasta
-                            globalLevel = 1;  //el momento jugadas normales y me acaban de devolver un jump
+                    else if(level>0){
+                        if(globalLevel == 0){
+                            globalLevel = level; 
                             saveMoves(moves,possibilities.getValue(),true);
                         }
                         else{
+                            globalLevel = Math.max(globalLevel,level);
                             saveMoves(moves,possibilities.getValue(),false);
                         }
                     }
@@ -117,10 +117,10 @@ public class Rules {
 
 
     /**
-     * Toma las jugadas posibles y las copia en el Arraylist de las jugadas
-     * @param moves ArrayList con todas las jugadas
-     * @param newMoves int[][]
-     * @param delete cuando aparece el 1er jump posible se eliminan todas las jugadeas "normales"
+     * Saves the current player's last valid moves to the moves Arraylist.
+     * @param moves ArrayList of all moves found so far
+     * @param newMoves int[][] newly found moves
+     * @param delete when the first jump is found, the whole list is cleared
      */
     private void saveMoves(ArrayList<int[]> moves,int[][] newMoves,boolean delete){
         if(delete){
@@ -483,6 +483,4 @@ public class Rules {
                  (!ai && (localBoard[row][col] == 'r' || localBoard[row][col] == 'R')));
     }
 
-    //TODO:move both these methods to the public part of the class
-    
 }
